@@ -263,10 +263,11 @@ impl Link {
             let _ = match nla {
                 LinkNla::Address(bytes) => {
                     // FIXME: we should check the length first. Also we should not assume MAC addresses.
-                    link.set_address(
-                        MacAddress::from_bytes(&bytes[..])
-                            .map_err(|_| NetlinkIpError::InvalidLinkAddress(bytes.clone()))?,
-                    )
+                    if let Ok(mac_address) = MacAddress::from_bytes(&bytes[..]) {
+                        link.set_address(mac_address)
+                    } else {
+                        link.add_attribute(LinkNla::Address(bytes))
+                    }
                 }
                 LinkNla::IfName(name) => link.set_name(name),
                 LinkNla::IfAlias(alias) => link.set_alias(alias),
