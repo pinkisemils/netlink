@@ -13,7 +13,7 @@ use std::mem::size_of;
 
 use crate::constants::*;
 use crate::utils::{parse_u16, parse_u32};
-use crate::{DecodeError, DefaultNla, Emitable, Nla, NlaBuffer, Parseable};
+use crate::{DecodeError, DefaultNla, Nla, NlaBuffer, Parseable};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RouteNla {
@@ -22,12 +22,15 @@ pub enum RouteNla {
     Source(Vec<u8>),
     Gateway(Vec<u8>),
     PrefSource(Vec<u8>),
-    Metrics(RouteMetricsNla),
+    // Metrics(RouteMetricsNla),
+    Metrics(Vec<u8>),
     MultiPath(Vec<u8>),
-    CacheInfo(RouteCacheInfo),
+    // CacheInfo(RouteCacheInfo),
+    CacheInfo(Vec<u8>),
     Session(Vec<u8>),
     MpAlgo(Vec<u8>),
-    MfcStats(RouteMfcStats),
+    // MfcStats(RouteMfcStats),
+    MfcStats(Vec<u8>),
     Via(Vec<u8>),
     NewDestination(Vec<u8>),
     Pref(Vec<u8>),
@@ -68,6 +71,9 @@ impl Nla for RouteNla {
                 | Pad(ref bytes)
                 | Uid(ref bytes)
                 | TtlPropagate(ref bytes)
+                | CacheInfo(ref bytes)
+                | MfcStats(ref bytes)
+                | Metrics(ref bytes)
                 => bytes.len(),
 
             EncapType(_) => size_of::<u16>(),
@@ -80,9 +86,6 @@ impl Nla for RouteNla {
                 | Mark(_)
                 => size_of::<u32>(),
 
-            CacheInfo(_) => ROUTE_CACHE_INFO_LEN,
-            MfcStats(_) => ROUTE_MFC_STATS_LEN,
-            Metrics(ref attr) => attr.buffer_len(),
             Other(ref attr) => attr.value_len(),
         }
     }
@@ -107,6 +110,9 @@ impl Nla for RouteNla {
                 | Pad(ref bytes)
                 | Uid(ref bytes)
                 | TtlPropagate(ref bytes)
+                | CacheInfo(ref bytes)
+                | MfcStats(ref bytes)
+                | Metrics(ref bytes)
                 => buffer.copy_from_slice(bytes.as_slice()),
             EncapType(value) => NativeEndian::write_u16(buffer, value),
             Iif(value)
@@ -117,9 +123,6 @@ impl Nla for RouteNla {
                 | Table(value)
                 | Mark(value)
                 => NativeEndian::write_u32(buffer, value),
-            CacheInfo(ref cache_info) => cache_info.emit(buffer),
-            MfcStats(ref mfc_stats) => mfc_stats.emit(buffer),
-            Metrics(ref attr) => attr.emit(buffer),
             Other(ref attr) => attr.emit_value(buffer),
         }
     }
@@ -192,24 +195,27 @@ impl<'buffer, T: AsRef<[u8]> + ?Sized> Parseable<RouteNla> for NlaBuffer<&'buffe
             RTA_FLOW => Flow(parse_u32(payload).context("invalid RTA_FLOW value")?),
             RTA_TABLE => Table(parse_u32(payload).context("invalid RTA_TABLE value")?),
             RTA_MARK => Mark(parse_u32(payload).context("invalid RTA_MARK value")?),
-            RTA_CACHEINFO => CacheInfo(
-                RouteCacheInfoBuffer::new_checked(payload)
-                    .context("invalid RTA_CACHEINFO value")?
-                    .parse()
-                    .context("invalid RTA_CACHEINFO value")?,
-            ),
-            RTA_MFC_STATS => MfcStats(
-                RouteMfcStatsBuffer::new_checked(payload)
-                    .context("invalid RTA_MFC_STATS value")?
-                    .parse()
-                    .context("invalid RTA_MFC_STATS value")?,
-            ),
-            RTA_METRICS => Metrics(
-                NlaBuffer::new_checked(payload)
-                    .context("invalid RTA_METRICS value")?
-                    .parse()
-                    .context("invalid RTA_METRICS value")?,
-            ),
+            RTA_CACHEINFO => CacheInfo(payload.to_vec()),
+            // RTA_CACHEINFO => CacheInfo(
+            //     RouteCacheInfoBuffer::new_checked(payload)
+            //         .context("invalid RTA_CACHEINFO value")?
+            //         .parse()
+            //         .context("invalid RTA_CACHEINFO value")?,
+            // ),
+            RTA_MFC_STATS => MfcStats(payload.to_vec()),
+            // RTA_MFC_STATS => MfcStats(
+            //     RouteMfcStatsBuffer::new_checked(payload)
+            //         .context("invalid RTA_MFC_STATS value")?
+            //         .parse()
+            //         .context("invalid RTA_MFC_STATS value")?,
+            // ),
+            RTA_METRICS => Metrics(payload.to_vec()),
+            // RTA_METRICS => Metrics(
+            //     NlaBuffer::new_checked(payload)
+            //         .context("invalid RTA_METRICS value")?
+            //         .parse()
+            //         .context("invalid RTA_METRICS value")?,
+            // ),
             _ => Other(
                 <Self as Parseable<DefaultNla>>::parse(self)
                     .context("invalid NLA (unknown kind)")?,
